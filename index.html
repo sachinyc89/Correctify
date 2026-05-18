@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#07080F">
+    <title>Correctify — Fix It, Write It, Translate It</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        bg: '#07080F',
+                        surface: '#0E1019',
+                        card: '#12141F',
+                        cardhover: '#181B2A',
+                        border: '#1C1F30',
+                        accent: '#FF6B35',
+                        accentGlow: '#FF8A5C',
+                        teal: '#00D4AA',
+                        tealGlow: '#33E0BE',
+                        txt: '#EAECF2',
+                        muted: '#6B7294',
+                        errBg: '#2D1418',
+                        errTxt: '#F87171',
+                        fixBg: '#0D2818',
+                        fixTxt: '#34D399'
+                    },
+                    fontFamily: {
+                        display: ['Space Grotesk', 'sans-serif'],
+                        body: ['DM Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'DM Sans', sans-serif; background: #07080F; color: #EAECF2; overflow: hidden; }
+        ::-webkit-scrollbar { width: 3px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1C1F30; border-radius: 4px; }
+
+        /* Splash */
+        #splash {
+            position: fixed; inset: 0; z-index: 9999; background: #07080F;
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+            transition: opacity 0.6s ease, visibility 0.6s ease;
+        }
+        #splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+        .splash-icon {
+            width: 72px; height: 72px; border-radius: 18px;
+            background: linear-gradient(135deg, #FF6B35, #FF8A5C);
+            display: flex; align-items: center; justify-content: center;
+            animation: splashPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes splashPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255,107,53,0.4); }
+            50% { box-shadow: 0 0 0 20px rgba(255,107,53,0); }
+        }
+
+        /* Tab transitions */
+        .tab-panel { display: none; animation: fadeSlide 0.35s ease; }
+        .tab-panel.active { display: block; }
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(14px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Bottom nav */
+        .nav-btn { transition: all 0.2s; position: relative; }
+        .nav-btn.active .nav-icon { color: #FF6B35; }
+        .nav-btn.active .nav-label { color: #FF6B35; }
+        .nav-btn.active::before {
+            content: ''; position: absolute; top: -1px; left: 50%; transform: translateX(-50%);
+            width: 24px; height: 3px; background: #FF6B35; border-radius: 0 0 4px 4px;
+        }
+
+        /* Custom select */
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%236B7294' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 12px center;
+        }
+
+        /* Toast */
+        .toast-item { animation: toastIn 0.35s ease, toastOut 0.35s ease 2.5s forwards; }
+        @keyframes toastIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes toastOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
+
+        /* Correction highlights */
+        .err-hl { background: #2D1418; color: #F87171; border-radius: 3px; padding: 1px 3px; text-decoration: line-through; font-size: 0.95em; }
+        .fix-hl { background: #0D2818; color: #34D399; border-radius: 3px; padding: 1px 3px; font-weight: 600; }
+
+        /* Textarea & input */
+        textarea:focus, input:focus, select:focus { outline: none; border-color: #FF6B35 !important; box-shadow: 0 0 0 3px rgba(255,107,53,0.1); }
+
+        /* Scenario & tone selectors */
+        .scenario-card { transition: all 0.2s; cursor: pointer; }
+        .scenario-card:hover { background: #181B2A; }
+        .scenario-card.active { border-color: #FF6B35 !important; background: rgba(255,107,53,0.06); }
+        .tone-pill { transition: all 0.2s; cursor: pointer; }
+        .tone-pill.active { background: #FF6B35 !important; color: #07080F !important; font-weight: 700; border-color: #FF6B35 !important; }
+
+        /* Copy btn */
+        .copy-btn { transition: all 0.15s; }
+        .copy-btn:active { transform: scale(0.88); }
+
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 200; background: rgba(7,8,15,0.85);
+            backdrop-filter: blur(8px); display: flex; align-items: flex-end; justify-content: center;
+            animation: overlayIn 0.25s ease;
+        }
+        .modal-overlay.closing { animation: overlayOut 0.25s ease forwards; }
+        @keyframes overlayIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+        .modal-content {
+            background: #12141F; border-top: 1px solid #1C1F30; border-radius: 24px 24px 0 0;
+            max-height: 85vh; width: 100%; max-width: 520px; overflow-y: auto;
+            animation: modalSlideUp 0.3s ease;
+        }
+        .modal-overlay.closing .modal-content { animation: modalSlideDown 0.25s ease forwards; }
+        @keyframes modalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes modalSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+
+        /* Background ambient */
+        .bg-ambient {
+            position: fixed; border-radius: 50%; filter: blur(100px); pointer-events: none; opacity: 0.05;
+            animation: ambientFloat 25s ease-in-out infinite;
+        }
+        @keyframes ambientFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(40px, -30px) scale(1.08); }
+            66% { transform: translate(-30px, 20px) scale(0.92); }
+        }
+
+        /* Feature pill on nav */
+        .nav-badge {
+            position: absolute; top: 2px; right: 50%; transform: translateX(14px);
+            width: 6px; height: 6px; background: #FF6B35; border-radius: 50%;
+        }
+
+        /* Processing dots */
+        .dots span { animation: dotBounce 1.2s ease-in-out infinite; }
+        .dots span:nth-child(2) { animation-delay: 0.15s; }
+        .dots span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes dotBounce { 0%, 80%, 100% { opacity: 0.2; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+        /* Guide step number */
+        .step-num {
+            width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+            background: linear-gradient(135deg, #FF6B35, #FF8A5C);
+            display: flex; align-items: center; justify-content: center;
+            font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 13px; color: #07080F;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+        @media (min-width: 768px) {
+            .app-shell { max-width: 480px; margin: 0 auto; border-left: 1px solid #1C1F30; border-right: 1px solid #1C1F30; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Ambient background -->
+    <div class="bg-ambient" style="width:450px;height:450px;background:#FF6B35;top:-150px;right:-120px;"></div>
+    <div class="bg-ambient" style="width:350px;height:350px;background:#00D4AA;bottom:80px;left:-100px;animation-delay:-10s;"></div>
+
+    <!-- Splash Screen -->
+    <div id="splash">
+        <div class="splash-icon mb-5">
+            <i class="fa-solid fa-check-double text-white text-2xl"></i>
+        </div>
+        <h1 class="font-display text-2xl font-bold text-txt tracking-tight">Correctify</h1>
+        <p class="text-muted text-sm mt-1 tracking-wide">Fix It. Write It. Translate It.</p>
+    </div>
+
+    <!-- App Shell -->
+    <div id="app" class="app-shell h-screen flex flex-col opacity-0 transition-opacity duration-700">
+        <!-- Header -->
+        <header class="flex items-center justify-between px-5 pt-3 pb-2.5 bg-bg/80 backdrop-blur-xl border-b border-border sticky top-0 z-50">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-accentGlow flex items-center justify-center shadow-lg shadow-accent/20">
+                    <i class="fa-solid fa-check-double text-bg text-sm"></i>
+                </div>
+                <div>
+                    <h1 class="font-display text-base font-bold text-txt leading-tight">Correctify</h1>
+                    <p class="text-[10px] text-muted leading-none tracking-wider uppercase">Fix &middot; Write &middot; Translate</p>
+                </div>
+            </div>
+            <button onclick="openGuide()" class="flex items-center gap-1.5 text-xs font-medium bg-accent/10 text-accent px-3 py-1.5 rounded-full border border-accent/20 hover:bg-accent/20 transition" aria-label="Publish Guide">
+                <i class="fa-solid fa-rocket text-[10px]"></i> Publish
+            </button>
+        </header>
+
+        <!-- Main Scrollable -->
+        <main class="flex-1 overflow-y-auto pb-24 px-4 pt-4" id="main-scroll">
+
+            <!-- ====== GRAMMAR TAB ====== -->
+            <section id="tab-grammar" class="tab-panel active">
+                <div class="mb-4">
+                    <h2 class="font-display text-xl font-bold text-txt">Fix Grammar</h2>
+                    <p class="text-muted text-sm mt-0.5">Paste text and get instant corrections</p>
+                </div>
+                <div class="bg-card rounded-2xl border border-border p-4 mb-3">
+                    <textarea id="grammar-input" rows="6" class="w-full bg-surface border border-border rounded-xl px-4 py-3 text-txt text-sm resize-none placeholder:text-muted/40 leading-relaxed" placeholder="Type or paste your English text here..."></textarea>
+                    <div class="flex items-center justify-between mt-3">
+                        <span id="grammar-count" class="text-xs text-muted">0 chars</span>
+                        <button onclick="fixGrammar()" class="bg-gradient-to-r from-accent to-accentGlow hover:brightness-110 text-bg font-semibold text-sm px-6 py-2.5 rounded-xl transition flex items-center gap-2 shadow-lg shadow-accent/20" aria-label="Fix Grammar">
+                            <i class="fa-solid fa-wand-magic-sparkles text-xs"></i> Fix Now
+                        </button>
+                    </div>
+                </div>
+                <div id="grammar-results" class="hidden space-y-3">
+                    <div class="bg-card rounded-2xl border border-border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-display text-sm font-semibold text-txt flex items-center gap-2">
+                                <i class="fa-solid fa-circle-check text-teal text-xs"></i> Corrected Text
+                            </h3>
+                            <button onclick="copyEl('grammar-fixed')" class="copy-btn text-xs text-muted hover:text-accent flex items-center gap-1" aria-label="Copy"><i class="fa-regular fa-copy"></i> Copy</button>
+                        </div>
+                        <div id="grammar-fixed" class="text-sm text-txt/90 leading-relaxed bg-surface rounded-xl p-3 border border-border/50"></div>
+                    </div>
+                    <div class="bg-card rounded-2xl border border-border p-4">
+                        <h3 class="font-display text-sm font-semibold text-txt mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-accent text-xs"></i> Corrections
+                        </h3>
+                        <div id="corrections-list" class="space-y-2"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== EMAIL TAB ====== -->
+            <section id="tab-email" class="tab-panel">
+                <div class="mb-4">
+                    <h2 class="font-display text-xl font-bold text-txt">Email Generator</h2>
+                    <p class="text-muted text-sm mt-0.5">Craft professional or casual emails instantly</p>
+                </div>
+                <div class="bg-card rounded-2xl border border-border p-4 mb-3">
+                    <label class="text-xs text-muted font-medium uppercase tracking-wider mb-2 block">Scenario</label>
+                    <div class="grid grid-cols-2 gap-2 mb-4" id="email-scenarios">
+                        <div class="scenario-card active rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="followUp"><i class="fa-solid fa-rotate-right text-accent text-sm mb-1 block"></i>Follow Up</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="apology"><i class="fa-solid fa-hand text-accent text-sm mb-1 block"></i>Apology</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="request"><i class="fa-solid fa-paper-plane text-accent text-sm mb-1 block"></i>Request</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="thankYou"><i class="fa-solid fa-heart text-accent text-sm mb-1 block"></i>Thank You</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="introduction"><i class="fa-solid fa-handshake text-accent text-sm mb-1 block"></i>Introduction</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="complaint"><i class="fa-solid fa-triangle-exclamation text-accent text-sm mb-1 block"></i>Complaint</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="invitation"><i class="fa-solid fa-envelope-open-text text-accent text-sm mb-1 block"></i>Invitation</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="meeting"><i class="fa-solid fa-calendar text-accent text-sm mb-1 block"></i>Meeting</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="congrats"><i class="fa-solid fa-trophy text-accent text-sm mb-1 block"></i>Congrats</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="resignation"><i class="fa-solid fa-door-open text-accent text-sm mb-1 block"></i>Resignation</div>
+                    </div>
+                    <label class="text-xs text-muted font-medium uppercase tracking-wider mb-2 block">Tone</label>
+                    <div class="flex gap-2 mb-4" id="email-tone">
+                        <div class="tone-pill active rounded-full px-4 py-1.5 text-xs bg-surface border border-border text-txt" data-val="professional">Professional</div>
+                        <div class="tone-pill rounded-full px-4 py-1.5 text-xs bg-surface border border-border text-txt" data-val="casual">Casual</div>
+                        <div class="tone-pill rounded-full px-4 py-1.5 text-xs bg-surface border border-border text-txt" data-val="friendly">Friendly</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div><label class="text-xs text-muted font-medium mb-1 block">Recipient</label><input id="email-to" type="text" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt placeholder:text-muted/40" placeholder="e.g. Sarah"></div>
+                        <div><label class="text-xs text-muted font-medium mb-1 block">Your Name</label><input id="email-from" type="text" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt placeholder:text-muted/40" placeholder="e.g. Alex"></div>
+                    </div>
+                    <label class="text-xs text-muted font-medium mb-1 block">Context</label>
+                    <textarea id="email-context" rows="3" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt resize-none placeholder:text-muted/40" placeholder="What's this email about? Key points..."></textarea>
+                    <button onclick="genEmail()" class="w-full mt-3 bg-gradient-to-r from-accent to-accentGlow hover:brightness-110 text-bg font-semibold text-sm py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-accent/20" aria-label="Generate Email">
+                        <i class="fa-solid fa-bolt text-xs"></i> Generate Email
+                    </button>
+                </div>
+                <div id="email-results" class="hidden">
+                    <div class="bg-card rounded-2xl border border-border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-display text-sm font-semibold text-txt flex items-center gap-2"><i class="fa-solid fa-envelope-circle-check text-teal text-xs"></i> Generated Email</h3>
+                            <button onclick="copyEl('email-out')" class="copy-btn text-xs text-muted hover:text-accent flex items-center gap-1" aria-label="Copy"><i class="fa-regular fa-copy"></i> Copy</button>
+                        </div>
+                        <div id="email-out" class="text-sm text-txt/90 leading-relaxed bg-surface rounded-xl p-3 border border-border/50 whitespace-pre-wrap"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ====== CHAT TAB ====== -->
+            <section id="tab-chat" class="tab-panel">
+                <div class="mb-4">
+                    <h2 class="font-display text-xl font-bold text-txt">Chat Generator</h2>
+                    <p class="text-muted text-sm mt-0.5">Generate perfect messages for any situation</p>
+                </div>
+                <div class="bg-card rounded-2xl border border-border p-4 mb-3">
+                    <label class="text-xs text-muted font-medium uppercase tracking-wider mb-2 block">Scenario</label>
+                    <div class="grid grid-cols-2 gap-2 mb-4" id="chat-scenarios">
+                        <div class="scenario-card active rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="greeting"><i class="fa-solid fa-hand-peace text-teal text-sm mb-1 block"></i>Greeting</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="followUp"><i class="fa-solid fa-rotate-right text-teal text-sm mb-1 block"></i>Follow Up</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="appreciation"><i class="fa-solid fa-star text-teal text-sm mb-1 block"></i>Appreciation</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="reminder"><i class="fa-solid fa-bell text-teal text-sm mb-1 block"></i>Reminder</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="checkIn"><i class="fa-solid fa-phone text-teal text-sm mb-1 block"></i>Check In</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="congrats"><i class="fa-solid fa-trophy text-teal text-sm mb-1 block"></i>Congrats</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="apology"><i class="fa-solid fa-face-sad-tear text-teal text-sm mb-1 block"></i>Apology</div>
+                        <div class="scenario-card rounded-xl border border-border bg-surface px-3 py-2.5 text-center text-xs text-txt" data-val="feedback"><i class="fa-solid fa-comment-dots text-teal text-sm mb-1 block"></i>Feedback</div>
+                    </div>
+                    <label class="text-xs text-muted font-medium uppercase tracking-wider mb-2 block">Tone</label>
+                    <div class="flex gap-2 mb-4" id="chat-tone">
+                        <div class="tone-pill active rounded-full px-4 py-1.5 text-xs bg-surface border border-border text-txt" data-val="professional">Professional</div>
+                        <div class="tone-pill rounded-full px-4 py-1.5 text-xs bg-surface border border-border text-txt" data-val="casual">Casual</div>
+                        <div class="tone-pill rounded-full px-4 py-1.5 text-xs bg-surface border border-border text-txt" data-val="friendly">Friendly</div>
+                    </div>
+                    <label class="text-xs text-muted font-medium mb-1 block">Recipient</label>
+                    <input id="chat-to" type="text" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt mb-3 placeholder:text-muted/40" placeholder="e.g. Jordan">
+                    <label class="text-xs text-muted font-medium mb-1 block">Context</label>
+                    <textarea id="chat-context" rows="3" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt resize-none placeholder:text-muted/40" placeholder="What do you want to say?"></textarea>
+                    <button onclick="genChat()" class="w-full mt-3 bg-gradient-to-r from-teal to-tealGlow hover:brightness-110 text-bg font-semibold text-sm py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-teal/20" aria-label="Generate Messages">
+                        <i class="fa-solid fa-comments text-xs"></i> Generate Messages
+                    </button>
+                </div>
+                <div id="chat-results" class="hidden space-y-2">
+                    <h3 class="font-display text-sm font-semibold text-txt flex items-center gap-2 mb-1"><i class="fa-solid fa-message text-teal text-xs"></i> Suggested Messages</h3>
+                    <div id="chat-out" class="space-y-2"></div>
+                </div>
+            </section>
+
+            <!-- ====== TRANSLATE TAB ====== -->
+            <section id="tab-translate" class="tab-panel">
+                <div class="mb-4">
+                    <h2 class="font-display text-xl font-bold text-txt">Translate</h2>
+                    <p class="text-muted text-sm mt-0.5">Translate text across 35+ languages</p>
+                </div>
+                <div class="bg-card rounded-2xl border border-border p-4 mb-3">
+                    <div class="flex items-end gap-2 mb-3">
+                        <div class="flex-1">
+                            <label class="text-xs text-muted font-medium mb-1 block">From</label>
+                            <select id="tr-from" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt pr-8">
+                                <option value="en">English</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="de">German</option>
+                                <option value="it">Italian</option>
+                                <option value="pt">Portuguese</option>
+                                <option value="ru">Russian</option>
+                                <option value="ja">Japanese</option>
+                                <option value="ko">Korean</option>
+                                <option value="zh">Chinese (Simplified)</option>
+                                <option value="ar">Arabic</option>
+                                <option value="hi">Hindi</option>
+                                <option value="ml">Malayalam</option>
+                                <option value="ta">Tamil</option>
+                                <option value="te">Telugu</option>
+                                <option value="kn">Kannada</option>
+                                <option value="bn">Bengali</option>
+                                <option value="gu">Gujarati</option>
+                                <option value="mr">Marathi</option>
+                                <option value="pa">Punjabi</option>
+                                <option value="ur">Urdu</option>
+                                <option value="si">Sinhala</option>
+                                <option value="ne">Nepali</option>
+                            </select>
+                        </div>
+                        <button onclick="swapLangs()" class="mb-0.5 w-10 h-10 rounded-full bg-surface border border-border flex items-center justify-center text-accent hover:bg-accent/10 transition" aria-label="Swap languages"><i class="fa-solid fa-arrows-rotate text-sm"></i></button>
+                        <div class="flex-1">
+                            <label class="text-xs text-muted font-medium mb-1 block">To</label>
+                            <select id="tr-to" class="w-full bg-surface border border-border rounded-xl px-3 py-2 text-sm text-txt pr-8">
+                                <option value="ml">Malayalam</option>
+                                <option value="ta">Tamil</option>
+                                <option value="te">Telugu</option>
+                                <option value="kn">Kannada</option>
+                                <option value="hi">Hindi</option>
+                                <option value="bn">Bengali</option>
+                                <option value="gu">Gujarati</option>
+                                <option value="mr">Marathi</option>
+                                <option value="pa">Punjabi</option>
+                                <option value="ur">Urdu</option>
+                                <option value="si">Sinhala</option>
+                                <option value="ne">Nepali</option>
+                                <option value="es">Spanish</option>
+                                <option value="fr">French</option>
+                                <option value="de">German</option>
+                                <option value="it">Italian</option>
+                                <option value="pt">Portuguese</option>
+                                <option value="ru">Russian</option>
+                                <option value="ja">Japanese</option>
+                                <option value="ko">Korean</option>
+                                <option value="zh">Chinese (Simplified)</option>
+                                <option value="ar">Arabic</option>
+                                <option value="tr">Turkish</option>
+                                <option value="vi">Vietnamese</option>
+                                <option value="th">Thai</option>
+                                <option value="nl">Dutch</option>
+                                <option value="pl">Polish</option>
+                                <option value="sv">Swedish</option>
+                                <option value="da">Danish</option>
+                                <option value="no">Norwegian</option>
+                                <option value="fi">Finnish</option>
+                                <option value="el">Greek</option>
+                                <option value="cs">Czech</option>
+                                <option value="ro">Romanian</option>
+                                <option value="hu">Hungarian</option>
+                                <option value="uk">Ukrainian</option>
+                                <option value="id">Indonesian</option>
+                                <option value="ms">Malay</option>
+                                <option value="he">Hebrew</option>
+                                <option value="en">English</option>
+                            </select>
+                        </div>
+                    </div>
+                    <textarea id="tr-input" rows="5" class="w-full bg-surface border border-border rounded-xl px-4 py-3 text-txt text-sm resize-none placeholder:text-muted/40 leading-relaxed" placeholder="Enter text to translate..."></textarea>
+                    <button onclick="doTranslate()" id="tr-btn" class="w-full mt-3 bg-gradient-to-r from-accent to-accentGlow hover:brightness-110 text-bg font-semibold text-sm py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-accent/20" aria-label="Translate">
+                        <i class="fa-solid fa-globe text-xs"></i> Translate
+                    </button>
+                </div>
+                <div id="tr-results" class="hidden">
+                    <div class="bg-card rounded-2xl border border-border p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-display text-sm font-semibold text-txt flex items-center gap-2"><i class="fa-solid fa-language text-accent text-xs"></i> Translation</h3>
+                            <button onclick="copyEl('tr-output')" class="copy-btn text-xs text-muted hover:text-accent flex items-center gap-1" aria-label="Copy"><i class="fa-regular fa-copy"></i> Copy</button>
+                        </div>
+                        <div id="tr-output" class="text-sm text-txt/90 leading-relaxed bg-surface rounded-xl p-3 border border-border/50"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Bottom Nav -->
+        <nav class="fixed bottom-0 left-0 right-0 bg-card/90 backdrop-blur-xl border-t border-border z-50" role="navigation" aria-label="Main">
+            <div class="max-w-[480px] mx-auto flex items-center justify-around py-1.5 px-2">
+                <button class="nav-btn active flex flex-col items-center gap-0.5 py-1.5 px-3" data-tab="grammar" aria-label="Grammar">
+                    <i class="nav-icon fa-solid fa-spell-check text-[17px] text-accent"></i>
+                    <span class="nav-label text-[10px] text-accent">Grammar</span>
+                </button>
+                <button class="nav-btn flex flex-col items-center gap-0.5 py-1.5 px-3" data-tab="email" aria-label="Email">
+                    <i class="nav-icon fa-solid fa-envelope text-[17px] text-muted"></i>
+                    <span class="nav-label text-[10px] text-muted">Email</span>
+                </button>
+                <button class="nav-btn flex flex-col items-center gap-0.5 py-1.5 px-3" data-tab="chat" aria-label="Chat">
+                    <i class="nav-icon fa-solid fa-comments text-[17px] text-muted"></i>
+                    <span class="nav-label text-[10px] text-muted">Chat</span>
+                </button>
+                <button class="nav-btn flex flex-col items-center gap-0.5 py-1.5 px-3" data-tab="translate" aria-label="Translate">
+                    <i class="nav-icon fa-solid fa-earth-americas text-[17px] text-muted"></i>
+                    <span class="nav-label text-[10px] text-muted">Translate</span>
+                    <div class="nav-badge"></div>
+                </button>
+            </div>
+            <!-- Safe area spacer for iPhones -->
+            <div class="h-[env(safe-area-inset-bottom)]"></div>
+        </nav>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toasts" class="fixed top-4 right-4 z-[300] space-y-2 pointer-events-none"></div>
+
+    <!-- PUBLISH GUIDE MODAL -->
+    <div id="guide-modal" class="hidden"></div>
+
+    <script>
+    // ============================================================
+    // INIT
+    // ============================================================
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            document.getElementById('splash').classList.add('hide');
+            document.getElementById('app').classList.remove('opacity-0');
+        }, 1400);
+    });
+
+    // ============================================================
+    // TAB NAV
+    // ============================================================
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.classList.remove('active');
+                b.querySelector('.nav-icon').className = b.querySelector('.nav-icon').className.replace('text-accent','text-muted');
+                b.querySelector('.nav-label').className = b.querySelector('.nav-label').className.replace('text-accent','text-muted');
+            });
+            btn.classList.add('active');
+            btn.querySelector('.nav-icon').className = btn.querySelector('.nav-icon').className.replace('text-muted','text-accent');
+            btn.querySelector('.nav-label').className = btn.querySelector('.nav-label').className.replace('text-muted','text-accent');
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            document.getElementById('main-scroll').scrollTop = 0;
+        });
+    });
+
+    // ============================================================
+    // SCENARIO / TONE SELECTORS
+    // ============================================================
+    function setupSelector(containerId, cls) {
+        document.querySelectorAll(`#${containerId} .${cls}`).forEach(el => {
+            el.addEventListener('click', () => {
+                document.querySelectorAll(`#${containerId} .${cls}`).forEach(s => s.classList.remove('active'));
+                el.classList.add('active');
+            });
+        });
+    }
+    setupSelector('email-scenarios', 'scenario-card');
+    setupSelector('chat-scenarios', 'scenario-card');
+    setupSelector('email-tone', 'tone-pill');
+    setupSelector('chat-tone', 'tone-pill');
+
+    function getVal(containerId, cls) {
+        const el = document.querySelector(`#${containerId} .${cls}.active`);
+        return el ? el.dataset.val : null;
+    }
+
+    // ============================================================
+    // CHAR COUNT
+    // ============================================================
+    document.getElementById('grammar-input').addEventListener('input', e => {
+        document.getElementById('grammar-count').textContent = e.target.value.length + ' chars';
+    });
+
+    // ============================================================
+    // TOAST
+    // ============================================================
+    function toast(msg, type='success') {
+        const c = document.getElementById('toasts');
+        const colors = { success:'bg-teal/15 border-teal/30 text-teal', error:'bg-errBg border-errTxt/30 text-errTxt', info:'bg-accent/15 border-accent/30 text-accent' };
+        const icons = { success:'fa-circle-check', error:'fa-circle-xmark', info:'fa-circle-info' };
+        const t = document.createElement('div');
+        t.className = `toast-item pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm backdrop-blur-sm ${colors[type]}`;
+        t.innerHTML = `<i class="fa-solid ${icons[type]} text-xs"></i><span>${msg}</span>`;
+        c.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+
+    // ============================================================
+    // COPY
+    // ============================================================
+    function copyEl(id) {
+        const el = document.getElementById(id);
+        const text = el.innerText || el.textContent;
+        navigator.clipboard.writeText(text).then(() => toast('Copied to clipboard')).catch(() => {
+            const r = document.createRange(); r.selectNodeContents(el);
+            const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+            document.execCommand('copy'); s.removeAllRanges(); toast('Copied to clipboard');
+        });
+    }
+    function copyRaw(text, btn) {
+        navigator.clipboard.writeText(text).then(() => {
+            toast('Copied');
+            if(btn){ btn.innerHTML='<i class="fa-solid fa-check text-xs text-teal"></i>'; setTimeout(()=>{btn.innerHTML='<i class="fa-regular fa-copy text-xs"></i>';},1200); }
+        });
+    }
+
+    // ============================================================
+    // ESCAPE HTML
+    // ============================================================
+    function esc(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
+
+    // ============================================================
+    // GRAMMAR FIXER
+    // ============================================================
+    function fixGrammar() {
+        const raw = document.getElementById('grammar-input').value.trim();
+        if(!raw){ toast('Enter some text first','error'); return; }
+        const fixes = [];
+        let t = raw;
+
+        function rule(re, rep, msg) {
+            const m = t.match(re);
+            if(m){ t = t.replace(re, rep); fixes.push({msg, n:m.length}); }
+        }
+
+        // Capital I
+        rule(/\bi\b/g, 'I', 'Capitalized "i" → "I"');
+        // Sentence starts
+        rule(/(^|[.!?]\s+)([a-z])/g, (m,p1,p2)=>p1+p2.toUpperCase(), 'Capitalized sentence starts');
+        // Homophones
+        rule(/\btheir\s+(is|are|was|were|will|would|should|could|can|has|have|had|been)\b/gi, (m,v)=>'there '+v, '"their" → "there" before verb');
+        rule(/\byour\s+(welcome|right|wrong|the|a|very|so|not|going|doing|being|amazing|great|best)\b/gi, (m,v)=>"you're "+v, '"your" → "you\'re"');
+        rule(/\bits\s+(a|an|the|been|not|going|very|really|quite|just|also|time)\b/gi, (m,v)=>"it's "+v, '"its" → "it\'s"');
+        // Too
+        rule(/\bto\s+(much|many|early|late|bad|hard|fast|slow|big|small|hot|cold|long|short|high|low|far|close|old|young|good|bad|far)\b/gi, (m,w)=>'too '+w, '"to" → "too"');
+        // Then/Than
+        rule(/\b(more|better|less|rather|other|bigger|smaller|older|younger|faster|slower|higher|lower)\s+then\b/gi, (m,w)=>w+' than', '"then" → "than" after comparison');
+        // Could of etc
+        rule(/\b(could|should|would|must|might)\s+of\b/gi, (m,v)=>v+' have', '"'+v+' of" → "'+v+' have"');
+        // Double words
+        rule(/\b(\w+)\s+\1\b/gi, '$1', 'Removed duplicate word');
+        // A/An
+        rule(/\ba\s+([aeiou]\w*)/gi, (m,w)=>'an '+w, '"a" → "an" before vowel');
+        rule(/\ban\s+([bcdfghjklmnpqrstvwxyz]\w*)/gi, (m,w)=>'a '+w, '"an" → "a" before consonant');
+        // Missing apostrophes
+        const contr = {doesnt:"doesn't",dont:"don't",cant:"can't",wont:"won't",isnt:"isn't",wasnt:"wasn't",werent:"weren't",hasnt:"hasn't",havent:"haven't",hadnt:"hadn't",didnt:"didn't",wouldnt:"wouldn't",couldnt:"couldn't",shouldnt:"shouldn't",arent:"aren't",im:"I'm",ive:"I've",youre:"you're",youve:"you've",theyre:"they're",theyve:"they've",thats:"that's",whos:"who's",whats:"what's",heres:"here's",theres:"there's",lets:"let's"};
+        let contrCount = 0;
+        for(const[w,r] of Object.entries(contr)){
+            const re = new RegExp('\\b'+w+'\\b','gi');
+            const m = t.match(re);
+            if(m){ t = t.replace(re, r); contrCount += m.length; }
+        }
+        if(contrCount) fixes.push({msg:'Fixed missing apostrophes in contractions', n:contrCount});
+
+        // Misspellings
+        const miss = {
+            recieve:'receive',recieved:'received',recieving:'receiving',seperate:'separate',seperated:'separated',
+            definately:'definitely',definatly:'definitely',definetly:'definitely',occured:'occurred',occurrance:'occurrence',
+            accomodate:'accommodate',accomodation:'accommodation',neccessary:'necessary',necesary:'necessary',
+            goverment:'government',enviroment:'environment',independant:'independent',occassion:'occasion',
+            privledge:'privilege',wierd:'weird',thier:'their',freind:'friend',freinds:'friends',freindly:'friendly',
+            beleive:'believe',beleived:'believed',calender:'calendar',cemetary:'cemetery',comming:'coming',
+            concious:'conscious',curiousity:'curiosity',dissapoint:'disappoint',dissapointed:'disappointed',
+            embarass:'embarrass',embarassed:'embarrassed',existance:'existence',foriegn:'foreign',gaurd:'guard',
+            happend:'happened',immediatly:'immediately',knowlege:'knowledge',libary:'library',maintenence:'maintenance',
+            managment:'management',millenium:'millennium',mispell:'misspell',noticable:'noticeable',
+            posession:'possession',prefered:'preferred',pronounciation:'pronunciation',publically:'publicly',
+            refered:'referred',relevent:'relevant',rember:'remember',sieze:'seize',
+            suprise:'surprise',suprised:'surprised',tommorow:'tomorrow',tommorrow:'tomorrow',truely:'truly',
+            untill:'until',writting:'writing',acheive:'achieve',arguement:'argument',basicly:'basically',
+            begining:'beginning',buisness:'business',completly:'completely',congradulations:'congratulations',
+            decieve:'deceive',desparate:'desperate',realy:'really',relevent:'relevant',persue:'pursue',
+            persuing:'pursuing',persistant:'persistent',potatos:'potatoes',tomatos:'tomatoes',
+            paralel:'parallel',minature:'miniature',mischievious:'mischievous',copywrite:'copyright'
+        };
+        let mc = 0;
+        for(const[w,r] of Object.entries(miss)){
+            const re = new RegExp('\\b'+w+'\\b','gi');
+            const m = t.match(re);
+            if(m){ t = t.replace(re, r); mc += m.length; }
+        }
+        if(mc) fixes.push({msg:`Fixed ${mc} misspelling(s)`, n:mc});
+
+        // Spacing
+        rule(/\s{2,}/g, ' ', 'Removed extra spaces');
+        rule(/\s+([,.!?;:])/g, '$1', 'Fixed space before punctuation');
+        if(t.length > 0 && !/[.!?]$/.test(t.trim())){
+            t = t.trimEnd() + '.';
+            fixes.push({msg:'Added period at end', n:1});
+        }
+
+        // Display
+        const resEl = document.getElementById('grammar-results');
+        const fixEl = document.getElementById('grammar-fixed');
+        const listEl = document.getElementById('corrections-list');
+
+        if(!fixes.length){
+            fixEl.innerHTML = `<span class="text-teal">${esc(t)}</span>`;
+            listEl.innerHTML = '<p class="text-teal text-sm flex items-center gap-2"><i class="fa-solid fa-circle-check"></i> No issues found — your text looks great!</p>';
+        } else {
+            // Highlight changed words
+            const origWords = new Set(raw.split(/\s+/));
+            let html = t.split(/(\s+)/).map(w => {
+                if(w.trim() && !origWords.has(w)) return `<span class="fix-hl">${esc(w)}</span>`;
+                return esc(w);
+            }).join('');
+            fixEl.innerHTML = html;
+            listEl.innerHTML = fixes.map(f => `
+                <div class="flex items-center gap-2 text-xs py-2 px-3 bg-surface rounded-lg border border-border/50">
+                    <i class="fa-solid fa-arrow-right text-accent text-[10px] flex-shrink-0"></i>
+                    <span class="text-txt/80">${f.msg}</span>
+                    ${f.n>1?`<span class="text-muted ml-auto flex-shrink-0">x${f.n}</span>`:''}
+                </div>
+            `).join('');
+        }
+        resEl.classList.remove('hidden');
+        resEl.scrollIntoView({behavior:'smooth', block:'start'});
+        toast(fixes.length ? `Fixed ${fixes.length} issue(s)` : 'No issues found', fixes.length ? 'success' : 'info');
+    }
+
+    // ============================================================
+    // EMAIL TEMPLATES
+    // ============================================================
+    const E = {
+        followUp:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI hope this message finds you well. I am writing to follow up on our previous discussion regarding ${c}. I wanted to check if there have been any updates or developments since we last spoke.\n\nPlease let me know if you need any additional information from my end. I look forward to hearing from you at your earliest convenience.\n\nBest regards,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nJust wanted to check in about ${c}. Have you had a chance to look into it yet? No rush, but I figured I'd touch base and see where things stand.\n\nLet me know when you get a chance!\n\nCheers,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r}!\n\nHope you're having a great week! I just wanted to follow up on ${c}. I know things can get hectic, so no pressure — just wanted to make sure we're still on the same page.\n\nLooking forward to catching up soon!\n\nWarmly,\n${s}`
+        },
+        apology:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI am writing to sincerely apologize for ${c}. I fully acknowledge that this situation fell short of expectations, and I take complete responsibility for the oversight.\n\nPlease be assured that I have taken immediate steps to prevent this from happening again. I value our relationship and am committed to making things right.\n\nWith sincere apologies,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nI wanted to say I'm really sorry about ${c}. That was totally my bad, and I should've handled it better.\n\nI'm already on it to make sure it doesn't happen again. Let me know if there's anything I can do to make it right.\n\nSorry again,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r},\n\nI just wanted to reach out and apologize for ${c}. I feel awful about it, and I want you to know I take full responsibility.\n\nYou mean a lot to me, and I'd never intentionally let you down. I'm already taking steps to fix this, and I hope you can forgive me.\n\nWith a heartfelt apology,\n${s}`
+        },
+        request:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI hope this email finds you well. I am writing to respectfully request ${c}. I believe this would be mutually beneficial and would greatly contribute to our shared objectives.\n\nI am happy to discuss this further at your convenience. Thank you for considering my request.\n\nBest regards,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nQuick favor to ask — would it be possible to ${c}? I think it would really help move things forward.\n\nTotally understand if the timing isn't right, but figured I'd ask. Let me know!\n\nThanks,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r}!\n\nI wanted to ask if you could help me with ${c}. It would mean the world to me, and I'd be happy to return the favor anytime!\n\nNo pressure at all — just thought I'd ask. Let me know!\n\nWarmly,\n${s}`
+        },
+        thankYou:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI would like to express my sincere gratitude for ${c}. Your contribution has been invaluable, and I truly appreciate the time and effort you dedicated.\n\nWith appreciation,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nHuge thanks for ${c}. You really came through, and I appreciate it a ton!\n\nYou're awesome. Let me know if I can ever return the favor.\n\nThanks again,\n${s}`,
+            friendly:(r,s,c)=>`Hey ${r}!\n\nI can't thank you enough for ${c}. You're seriously the best, and I'm so grateful!\n\nCoffee's on me next time!\n\nWith love and gratitude,\n${s}`
+        },
+        introduction:{
+            professional:(r,s,c)=>`Dear ${r},\n\nMy name is ${s}, and I am reaching out to introduce myself regarding ${c}. I believe there may be valuable opportunities for collaboration, and I would welcome the chance to explore these further.\n\nWould you be available for a brief call in the coming weeks? I am flexible and can accommodate your schedule.\n\nBest regards,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nI'm ${s} — nice to meet you! I came across your work related to ${c} and thought it'd be great to connect.\n\nWould love to chat more if you're up for it!\n\nCheers,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r}!\n\nI'm ${s}, and I'm so excited to reach out! I've heard great things about you, especially regarding ${c}, and I just had to say hello.\n\nWould love to grab a virtual coffee sometime!\n\nLooking forward to it,\n${s}`
+        },
+        complaint:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI am writing to formally bring to your attention a concern regarding ${c}. I have attempted to resolve this through other channels, but unfortunately, the issue persists.\n\nI trust that you will give this matter the attention it deserves. I would appreciate a prompt response outlining the steps to be taken.\n\nSincerely,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nI need to flag something — ${c}. I've tried sorting it out before, but it hasn't really improved.\n\nCan we chat about this when you get a chance?\n\nThanks,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r},\n\nI wanted to talk to you about something on my mind — ${c}. I value our relationship, and that's why I wanted to be open about this.\n\nI'm confident we can work this out together!\n\nTake care,\n${s}`
+        },
+        invitation:{
+            professional:(r,s,c)=>`Dear ${r},\n\nIt is my pleasure to formally invite you to ${c}. We believe your participation would add tremendous value, and we would be honored by your presence.\n\nPlease do not hesitate to reach out for further details.\n\nWarm regards,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nYou're invited! We're putting together ${c}, and it wouldn't be the same without you.\n\nLet me know if you can make it!\n\nCheers,\n${s}`,
+            friendly:(r,s,c)=>`Hey ${r}!\n\nI'd absolutely love for you to join us for ${c}! It's going to be such a fun time, and you being there would make it even better.\n\nSay yes!\n${s}`
+        },
+        meeting:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI would like to request a meeting to discuss ${c}. I believe a focused discussion would help us align on objectives and move forward effectively.\n\nPlease let me know your availability during the coming week.\n\nBest regards,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nCould we set up a quick chat about ${c}? I think it'd be helpful to sync up.\n\nLet me know when works for you!\n\nThanks,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r}!\n\nI'd love to catch up and chat about ${c}. Let's find a time that works for both of us!\n\nExcited to connect,\n${s}`
+        },
+        congrats:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI would like to extend my heartfelt congratulations on ${c}. This is a remarkable achievement that is well deserved given your dedication and hard work.\n\nWith warmest congratulations,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nHuge congrats on ${c}! That's awesome news and totally well deserved. You've been killing it!\n\nCelebrate big!\n\nHigh five,\n${s}`,
+            friendly:(r,s,c)=>`Oh my gosh, ${r}!!\n\nI am SO happy for you about ${c}! You absolutely deserve this, and I couldn't be more proud!\n\nThis calls for a celebration!\n\nSo much joy for you,\n${s}`
+        },
+        resignation:{
+            professional:(r,s,c)=>`Dear ${r},\n\nI am writing to formally notify you of my resignation from my position, effective as per the notice period in my contract. ${c}.\n\nI am committed to ensuring a smooth transition and will do everything I can to hand over my responsibilities effectively.\n\nSincerely,\n${s}`,
+            casual:(r,s,c)=>`Hey ${r},\n\nWanted to let you know I've decided to move on. ${c}.\n\nI'll make sure everything is wrapped up properly. Thanks for everything.\n\nAll the best,\n${s}`,
+            friendly:(r,s,c)=>`Hi ${r},\n\nBittersweet news — I've decided to take a new step. ${c}.\n\nThis wasn't easy. The people and experiences have meant the world to me. I'll make sure to wrap things up smoothly.\n\nI'd love to stay in touch!\n\nWith a full heart,\n${s}`
+        }
+    };
+
+    function genEmail(){
+        const sc = getVal('email-scenarios','scenario-card');
+        const tn = getVal('email-tone','tone-pill');
+        const r = document.getElementById('email-to').value.trim()||'Colleague';
+        const s = document.getElementById('email-from').value.trim()||'Sender';
+        const c = document.getElementById('email-context').value.trim();
+        if(!c){ toast('Please provide context','error'); return; }
+        const fn = E[sc]?.[tn] || E[sc]?.professional;
+        if(!fn){ toast('Template unavailable','error'); return; }
+        document.getElementById('email-out').textContent = fn(r,s,c);
+        document.getElementById('email-results').classList.remove('hidden');
+        document.getElementById('email-results').scrollIntoView({behavior:'smooth',block:'start'});
+        toast('Email generated','success');
+    }
+
+    // ============================================================
+    // CHAT TEMPLATES
+    // ============================================================
+    const C = {
+        greeting:{
+            professional:(r,c)=>[`Good morning, ${r}. I wanted to reach out regarding ${c}. Would now be a good time to discuss?`,`Hello ${r}, I hope you're doing well. I'd like to connect with you about ${c}. When might be convenient?`],
+            casual:(r,c)=>[`Hey ${r}! What's up? Wanted to chat about ${c}. Got a sec?`,`Yo ${r}, how's it going? Just wanted to touch base on ${c}.`],
+            friendly:(r,c)=>[`Hey ${r}! So good to see you! Wanted to talk about ${c} — how's everything?`,`Hi ${r}! Missed you! Let's catch up about ${c} sometime soon!`]
+        },
+        followUp:{
+            professional:(r,c)=>[`Hi ${r}, following up on our previous conversation about ${c}. Do you have any updates?`,`${r}, I wanted to circle back on ${c}. Please let me know if there's any progress.`],
+            casual:(r,c)=>[`Hey ${r}, any updates on ${c}? Just checking in!`,`${r} — just bumping this up. Let me know about ${c} when you can!`],
+            friendly:(r,c)=>[`Hey ${r}! Just checking in about ${c}. No rush at all!`,`Hi ${r}, hope you're great! Any news on ${c}?`]
+        },
+        appreciation:{
+            professional:(r,c)=>[`Thank you, ${r}, for your outstanding work on ${c}. It is truly appreciated.`,`I want to express my gratitude for your contribution to ${c}, ${r}. Thank you.`],
+            casual:(r,c)=>[`Thanks a ton for ${c}, ${r}! You're the best!`,`${r}, you nailed it with ${c}. Seriously, thank you!`],
+            friendly:(r,c)=>[`Ahh thank you so much for ${c}, ${r}! You're amazing!`,`${r}, you're incredible! Thank you for ${c}. I'm so grateful!`]
+        },
+        reminder:{
+            professional:(r,c)=>[`Gentle reminder, ${r}: ${c}. Please let me know if you need any assistance.`,`This is a friendly reminder regarding ${c}, ${r}. Your attention would be appreciated.`],
+            casual:(r,c)=>[`Hey ${r}, quick reminder about ${c}. Don't forget!`,`Just a heads up, ${r} — ${c}. Let me know if you need anything!`],
+            friendly:(r,c)=>[`Hey ${r}, just a little nudge about ${c}. No pressure though!`,`Friendly reminder about ${c}, ${r}! I know you're super busy!`]
+        },
+        checkIn:{
+            professional:(r,c)=>[`Hello ${r}, I wanted to check in regarding ${c}. Is everything on track?`,`${r}, I hope all is well. How are things progressing with ${c}?`],
+            casual:(r,c)=>[`Hey ${r}, how's ${c} going? Everything cool?`,`${r}, just checking in on ${c}. You good?`],
+            friendly:(r,c)=>[`Hey ${r}! How's everything with ${c}? I'm here if you need anything!`,`Hi ${r}, just wanted to see how you're doing with ${c}. You've got this!`]
+        },
+        congrats:{
+            professional:(r,c)=>[`Congratulations on ${c}, ${r}. This is a well-deserved accomplishment.`,`Well done, ${r}. Your achievement with ${c} is commendable.`],
+            casual:(r,c)=>[`Congrats on ${c}, ${r}! That's huge!`,`${r}, you crushed it with ${c}! So awesome!`],
+            friendly:(r,c)=>[`OMG ${r}, congratulations on ${c}! I'm SO proud of you!`,`${r}, this is amazing!! So happy for you about ${c}!`]
+        },
+        apology:{
+            professional:(r,c)=>[`I sincerely apologize for ${c}, ${r}. I will ensure this is addressed promptly.`,`${r}, I want to offer my apologies regarding ${c}. This will be corrected.`],
+            casual:(r,c)=>[`My bad about ${c}, ${r}. Really sorry about that!`,`${r}, I messed up with ${c}. Apologies! Let me fix it.`],
+            friendly:(r,c)=>[`I'm so sorry about ${c}, ${r}. I feel terrible and want to make it right.`,`${r}, I really messed up with ${c}. Please forgive me — I'll do better!`]
+        },
+        feedback:{
+            professional:(r,c)=>[`I'd like to share some constructive feedback regarding ${c}, ${r}. Could we discuss this?`,`${r}, I have some thoughts on ${c} that could be valuable. When would be a good time?`],
+            casual:(r,c)=>[`Hey ${r}, got some thoughts on ${c}. Mind if I share?`,`${r}, can I give you some quick feedback on ${c}? No pressure!`],
+            friendly:(r,c)=>[`Hey ${r}, I have some ideas about ${c} that might help! Want to hear them?`,`${r}, can I share some thoughts on ${c}? I think it could make things even better!`]
+        }
+    };
+
+    function genChat(){
+        const sc = getVal('chat-scenarios','scenario-card');
+        const tn = getVal('chat-tone','tone-pill');
+        const r = document.getElementById('chat-to').value.trim()||'friend';
+        const c = document.getElementById('chat-context').value.trim();
+        if(!c){ toast('Please provide context','error'); return; }
+        const fn = C[sc]?.[tn] || C[sc]?.professional;
+        if(!fn){ toast('Template unavailable','error'); return; }
+        const msgs = fn(r,c);
+        document.getElementById('chat-out').innerHTML = msgs.map((m,i)=>`
+            <div class="bg-card rounded-xl border border-border p-3 flex items-start gap-3">
+                <div class="w-8 h-8 rounded-full ${i%2===0?'bg-accent/15 text-accent':'bg-teal/15 text-teal'} flex items-center justify-center flex-shrink-0 text-xs font-bold">${i+1}</div>
+                <p class="text-sm text-txt/90 flex-1 min-w-0">${esc(m)}</p>
+                <button onclick="copyRaw(\`${esc(m).replace(/`/g,"\\`").replace(/\\/g,"\\\\")}\`, this)" class="copy-btn text-muted hover:text-accent flex-shrink-0" aria-label="Copy"><i class="fa-regular fa-copy text-xs"></i></button>
+            </div>
+        `).join('');
+        document.getElementById('chat-results').classList.remove('hidden');
+        document.getElementById('chat-results').scrollIntoView({behavior:'smooth',block:'start'});
+        toast('Messages generated','success');
+    }
+
+    // ============================================================
+    // TRANSLATOR
+    // ============================================================
+    function swapLangs(){
+        const f=document.getElementById('tr-from'), t=document.getElementById('tr-to');
+        const tmp=f.value; f.value=t.value; t.value=tmp;
+    }
+
+    async function doTranslate(){
+        const input = document.getElementById('tr-input').value.trim();
+        if(!input){ toast('Enter text to translate','error'); return; }
+        const from = document.getElementById('tr-from').value;
+        const to = document.getElementById('tr-to').value;
+        if(from===to){ toast('Source and target are the same language','info'); return; }
+
+        const btn = document.getElementById('tr-btn');
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span class="dots"><span>.</span><span>.</span><span>.</span></span> Translating';
+        btn.disabled = true;
+
+        try {
+            // MyMemory free translation API — no key needed
+            const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(input)}&langpair=${from}|${to}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            if(data.responseStatus === 200 && data.responseData){
+                document.getElementById('tr-output').textContent = data.responseData.translatedText;
+                document.getElementById('tr-results').classList.remove('hidden');
+                document.getElementById('tr-results').scrollIntoView({behavior:'smooth',block:'start'});
+                toast('Translation complete','success');
+            } else {
+                throw new Error(data.responseDetails || 'Translation failed');
+            }
+        } catch(err) {
+            toast('Translation failed: '+err.message,'error');
+        } finally {
+            btn.innerHTML = orig;
+            btn.disabled = false;
+        }
+    }
+
+    // ============================================================
+    // PUBLISH GUIDE MODAL
+    // ============================================================
+    function openGuide(){
+        const m = document.getElementById('guide-modal');
+        m.classList.remove('hidden');
+        m.innerHTML = `
+        <div class="modal-overlay" onclick="closeGuide(event)">
+            <div class="modal-content p-6" onclick="event.stopPropagation()">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="font-display text-lg font-bold text-txt">Publish to App Stores</h2>
+                    <button onclick="closeGuide()" class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-muted hover:text-txt transition" aria-label="Close"><i class="fa-solid fa-xmark text-sm"></i></button>
+                </div>
+
+                <!-- Overview -->
+                <div class="bg-surface rounded-xl border border-border p-4 mb-5">
+                    <p class="text-sm text-txt/80 leading-relaxed">Correctify is a Progressive Web App (PWA). To publish it on the <strong class="text-accent">App Store</strong> and <strong class="text-teal">Play Store</strong>, you need to wrap it in a native shell. Here's the complete roadmap:</p>
+                </div>
+
+                <!-- Option 1: Capacitor -->
+                <div class="mb-5">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="step-num">1</span>
+                        <h3 class="font-display text-sm font-bold text-txt">Use Capacitor (Recommended)</h3>
+                    </div>
+                    <div class="bg-surface rounded-xl border border-border p-4 text-xs text-txt/70 leading-relaxed space-y-2">
+                        <p><strong class="text-accent">Capacitor</strong> by Ionic wraps your web app into a real native app for iOS and Android.</p>
+                        <code class="block bg-bg rounded-lg px-3 py-2 text-teal font-mono">npm init -y<br>npm install @capacitor/core @capacitor/cli<br>npx cap init Correctify com.correctify.app<br>npx cap add android<br>npx cap add ios<br>npx cap copy<br>npx cap open android<br>npx cap open ios</code>
+                        <p>This creates real <code class="text-accent">.apk</code> and <code class="text-accent">.xcodeproj</code> projects.</p>
+                    </div>
+                </div>
+
+                <!-- Play Store -->
+                <div class="mb-5">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="step-num">2</span>
+                        <h3 class="font-display text-sm font-bold text-txt">Google Play Store</h3>
+                    </div>
+                    <div class="bg-surface rounded-xl border border-border p-4 text-xs text-txt/70 leading-relaxed space-y-3">
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">a.</span><span>Create a <strong>Google Play Developer Account</strong> — one-time $25 fee at <a href="https://play.google.com/console" class="text-teal underline" target="_blank">play.google.com/console</a></span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">b.</span><span>Build a <strong>signed AAB</strong> (Android App Bundle) from Android Studio: Build → Generate Signed Bundle</span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">c.</span><span>Create a <strong>store listing</strong>: app name, description, screenshots, feature graphic (1024×500), icon (512×512)</span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">d.</span><span>Complete <strong>content rating</strong> questionnaire and <strong>privacy policy</strong> URL</span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">e.</span><span>Upload AAB → <strong>Review & Publish</strong>. Review takes 1-7 days.</span></div>
+                    </div>
+                </div>
+
+                <!-- App Store -->
+                <div class="mb-5">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="step-num">3</span>
+                        <h3 class="font-display text-sm font-bold text-txt">Apple App Store</h3>
+                    </div>
+                    <div class="bg-surface rounded-xl border border-border p-4 text-xs text-txt/70 leading-relaxed space-y-3">
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">a.</span><span>Enroll in <strong>Apple Developer Program</strong> — $99/year at <a href="https://developer.apple.com/programs/" class="text-teal underline" target="_blank">developer.apple.com</a></span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">b.</span><span>Open the iOS project in <strong>Xcode</strong> (Mac required): <code class="text-accent">npx cap open ios</code></span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">c.</span><span>Configure <strong>bundle ID</strong>, signing team, app version in Xcode</span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">d.</span><span>Create <strong>App Store Connect</strong> listing: screenshots (6.5" and 5.5"), description, keywords, privacy policy</span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">e.</span><span>Archive & upload via <strong>Xcode → Product → Archive → Distribute App</strong></span></div>
+                        <div class="flex gap-2"><span class="text-accent font-bold w-4">f.</span><span>Submit for <strong>review</strong>. Takes 24-48 hours typically. Apple may request changes.</span></div>
+                    </div>
+                </div>
+
+                <!-- Alternative -->
+                <div class="mb-5">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="step-num">4</span>
+                        <h3 class="font-display text-sm font-bold text-txt">Alternative: PWA Builder</h3>
+                    </div>
+                    <div class="bg-surface rounded-xl border border-border p-4 text-xs text-txt/70 leading-relaxed space-y-2">
+                        <p>Microsoft's <a href="https://www.pwabuilder.com" class="text-teal underline" target="_blank">pwabuilder.com</a> can package your PWA for both stores. Upload your URL, and it generates Android and iOS packages automatically.</p>
+                        <p class="text-muted">Note: iOS packaging via PWABuilder uses WKWebView and may have limited feature support compared to Capacitor.</p>
+                    </div>
+                </div>
+
+                <!-- Checklist -->
+                <div class="mb-5">
+                    <h3 class="font-display text-sm font-bold text-txt mb-3">Checklist Before Publishing</h3>
+                    <div class="space-y-2">
+                        ${[
+                            'App icon (1024×1024 PNG, no alpha)',
+                            'Splash screen for all device sizes',
+                            'Privacy policy URL (required by both stores)',
+                            'App description and keywords',
+                            'Screenshots for each device size',
+                            'Feature graphic for Play Store (1024×500)',
+                            'Signed app bundle (AAB for Android, IPA for iOS)',
+                            'Test on real devices before submission'
+                        ].map(item => `
+                            <label class="flex items-start gap-2 text-xs text-txt/70 cursor-pointer">
+                                <input type="checkbox" class="mt-0.5 accent-accent rounded">
+                                <span>${item}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Cost Summary -->
+                <div class="bg-gradient-to-br from-accent/10 to-teal/10 rounded-xl border border-accent/20 p-4">
+                    <h3 class="font-display text-sm font-bold text-txt mb-2">Cost Summary</h3>
+                    <div class="space-y-1 text-xs text-txt/70">
+                        <div class="flex justify-between"><span>Google Play Developer</span><span class="text-accent font-semibold">$25 one-time</span></div>
+                        <div class="flex justify-between"><span>Apple Developer</span><span class="text-accent font-semibold">$99/year</span></div>
+                        <div class="flex justify-between"><span>Capacitor</span><span class="text-teal font-semibold">Free (open source)</span></div>
+                        <div class="flex justify-between"><span>MyMemory API</span><span class="text-teal font-semibold">Free tier available</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    function closeGuide(e){
+        const m = document.getElementById('guide-modal');
+        const overlay = m.querySelector('.modal-overlay');
+        if(e && e.target !== overlay) return;
+        overlay.classList.add('closing');
+        setTimeout(()=>{ m.classList.add('hidden'); m.innerHTML=''; }, 250);
+    }
+
+    // ============================================================
+    // KEYBOARD: Ctrl+Enter to submit
+    // ============================================================
+    document.addEventListener('keydown', e => {
+        if((e.ctrlKey||e.metaKey) && e.key==='Enter'){
+            const active = document.querySelector('.tab-panel.active');
+            const btn = active.querySelector('button[onclick]');
+            if(btn) btn.click();
+        }
+    });
+
+    // ============================================================
+    // AUTO-RESIZE TEXTAREAS
+    // ============================================================
+    document.querySelectorAll('textarea').forEach(ta => {
+        ta.addEventListener('input', function(){
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 280) + 'px';
+        });
+    });
+    </script>
+</body>
+</html>
